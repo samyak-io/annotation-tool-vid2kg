@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>vid2kg annotation tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1c1a17;
+    --panel: #262320;
+    --panel-2: #2f2b27;
+    --border: #443f39;
+    --text: #ece7de;
+    --text-dim: #a49c8f;
+    --accent: #d9a61a;
+    --accent-dim: #7a5f14;
+    --spoken: #d85a30;
+    --visual: #1d9e75;
+    --inferred: #7f77dd;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 4px;
+    letter-spacing: 0.02em;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  input, select, textarea {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent-dim);
+  }
+  .video-embed {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #000;
+    margin-top: 10px;
+  }
+  .section-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    margin: 20px 0 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+    color: #1c1a17;
+    font-weight: 500;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.2fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 8px;
+    background: var(--panel-2);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+  }
+  .row.src-spoken { border-left-color: var(--spoken); }
+  .row.src-visual { border-left-color: var(--visual); }
+  .row.src-inferred { border-left-color: var(--inferred); }
+  .step-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 8px;
+    background: var(--panel-2);
+    border-radius: 6px;
+  }
+  .row-remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 16px;
+    padding: 2px 6px;
+  }
+  .row-remove:hover { color: var(--spoken); }
+  .source-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .dot-spoken { background: var(--spoken); }
+  .dot-visual { background: var(--visual); }
+  .dot-inferred { background: var(--inferred); }
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .legend span { display: flex; align-items: center; }
+  pre#json-preview {
+    background: #141210;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre-wrap;
+    margin-top: 10px;
+  }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions button { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>vid2kg — annotation tool</h1>
+  <p class="subtitle">watch the video, log ground truth ingredients and steps, export as JSON</p>
+
+  <div class="layout">
+    <div class="panel">
+      <label for="video-url">youtube url or video id</label>
+      <input id="video-url" placeholder="https://www.youtube.com/watch?v=..." />
+      <div id="embed-wrap"></div>
+
+      <label style="margin-top:16px;">recipe title</label>
+      <input id="recipe-title" placeholder="e.g. Upma" />
+
+      <label style="margin-top:10px;">language</label>
+      <input id="recipe-lang" placeholder="e.g. Hindi, Tamil, Malayalam" />
+
+      <div class="actions">
+        <button class="primary" id="download-btn">download json</button>
+        <button id="load-btn">load json</button>
+        <input type="file" id="load-file" accept=".json" style="display:none;" />
+      </div>
+      <pre id="json-preview"></pre>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="section-title">
+          ingredients
+          <button id="add-ingredient">+ add row</button>
+        </div>
+        <div class="legend">
+          <span><span class="source-dot dot-spoken"></span>spoken</span>
+          <span><span class="source-dot dot-visual"></span>visual</span>
+          <span><span class="source-dot dot-inferred"></span>inferred</span>
+        </div>
+        <div id="ingredients-list"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="section-title">
+          steps
+          <button id="add-step">+ add row</button>
+        </div>
+        <div id="steps-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let state = {
+    video_url: '',
+    video_id: '',
+    title: '',
+    language: '',
+    ingredients: [],
+    steps: []
+  };
+
+  function extractVideoId(url) {
+    if (!url) return '';
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) return url.trim();
+    return '';
+  }
+
+  function updateEmbed() {
+    const url = document.getElementById('video-url').value;
+    const id = extractVideoId(url);
+    state.video_url = url;
+    state.video_id = id;
+    const wrap = document.getElementById('embed-wrap');
+    if (id) {
+      wrap.innerHTML = '<iframe class="video-embed" src="https://www.youtube.com/embed/' + id +
+        '" allowfullscreen></iframe>';
+    } else {
+      wrap.innerHTML = '<div class="video-embed" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:12px;">paste a youtube url above</div>';
+    }
+    renderJson();
+  }
+
+  function addIngredientRow(data) {
+    data = data || { name: '', quantity: '', unit: '', source: 'spoken' };
+    const list = document.getElementById('ingredients-list');
+    const row = document.createElement('div');
+    row.className = 'row src-' + data.source;
+    row.innerHTML =
+      '<input class="ing-name" placeholder="ingredient name" value="' + (data.name || '') + '" />' +
+      '<input class="ing-qty" placeholder="qty" value="' + (data.quantity || '') + '" />' +
+      '<input class="ing-unit" placeholder="unit" value="' + (data.unit || '') + '" />' +
+      '<select class="ing-source">' +
+        '<option value="spoken"' + (data.source === 'spoken' ? ' selected' : '') + '>spoken</option>' +
+        '<option value="visual"' + (data.source === 'visual' ? ' selected' : '') + '>visual</option>' +
+        '<option value="inferred"' + (data.source === 'inferred' ? ' selected' : '') + '>inferred</option>' +
+      '</select>' +
+      '<button class="row-remove" title="remove">×</button>';
+    list.appendChild(row);
+
+    const select = row.querySelector('.ing-source');
+    select.addEventListener('change', () => {
+      row.className = 'row src-' + select.value;
+      renderJson();
+    });
+    row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', renderJson));
+    row.querySelector('.row-remove').addEventListener('click', () => {
+      row.remove();
+      renderJson();
+    });
+  }
+
+  function addStepRow(data) {
+    data = data || { instruction: '', start: '', end: '' };
+    const list = document.getElementById('steps-list');
+    const row = document.createElement('div');
+    row.className = 'step-row';
+    row.innerHTML =
+      '<input class="step-instruction" placeholder="instruction" value="' + (data.instruction || '') + '" />' +
+      '<input class="step-start" placeholder="start (mm:ss)" value="' + (data.start || '') + '" />' +
+      '<input class="step-end" placeholder="end (mm:ss)" value="' + (data.end || '') + '" />' +
+      '<button class="row-remove" title="remove">×</button>';
+    list.appendChild(row);
+    row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', renderJson));
+    row.querySelector('.row-remove').addEventListener('click', () => {
+      row.remove();
+      renderJson();
+    });
+  }
+
+  function collectState() {
+    const ingredients = [];
+    document.querySelectorAll('#ingredients-list .row').forEach(row => {
+      ingredients.push({
+        name: row.querySelector('.ing-name').value,
+        quantity: row.querySelector('.ing-qty').value,
+        unit: row.querySelector('.ing-unit').value,
+        source: row.querySelector('.ing-source').value
+      });
+    });
+    const steps = [];
+    document.querySelectorAll('#steps-list .step-row').forEach(row => {
+      steps.push({
+        instruction: row.querySelector('.step-instruction').value,
+        start: row.querySelector('.step-start').value,
+        end: row.querySelector('.step-end').value
+      });
+    });
+    return {
+      video_url: state.video_url,
+      video_id: state.video_id,
+      title: document.getElementById('recipe-title').value,
+      language: document.getElementById('recipe-lang').value,
+      ingredients,
+      steps
+    };
+  }
+
+  function renderJson() {
+    const data = collectState();
+    document.getElementById('json-preview').textContent = JSON.stringify(data, null, 2);
+  }
+
+  document.getElementById('video-url').addEventListener('input', updateEmbed);
+  document.getElementById('recipe-title').addEventListener('input', renderJson);
+  document.getElementById('recipe-lang').addEventListener('input', renderJson);
+  document.getElementById('add-ingredient').addEventListener('click', () => { addIngredientRow(); renderJson(); });
+  document.getElementById('add-step').addEventListener('click', () => { addStepRow(); renderJson(); });
+
+  document.getElementById('download-btn').addEventListener('click', () => {
+    const data = collectState();
+    const filename = (data.video_id || 'annotation') + '.json';
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  });
+
+  document.getElementById('load-btn').addEventListener('click', () => {
+    document.getElementById('load-file').click();
+  });
+
+  document.getElementById('load-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = JSON.parse(evt.target.result);
+        document.getElementById('video-url').value = data.video_url || '';
+        document.getElementById('recipe-title').value = data.title || '';
+        document.getElementById('recipe-lang').value = data.language || '';
+        document.getElementById('ingredients-list').innerHTML = '';
+        document.getElementById('steps-list').innerHTML = '';
+        (data.ingredients || []).forEach(addIngredientRow);
+        (data.steps || []).forEach(addStepRow);
+        updateEmbed();
+        renderJson();
+      } catch (err) {
+        alert('Could not parse that file as JSON.');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Start with a couple of empty rows and an empty embed placeholder
+  addIngredientRow();
+  addStepRow();
+  updateEmbed();
+</script>
+</body>
+</html>
